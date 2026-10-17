@@ -202,8 +202,16 @@ jobs:
         "$TMP/magiskboot" --help > /dev/null 2>&1 || true
 
         cd "$TMP"
+        rm -f kernel ramdisk.cpio header dtb extra second
         "$TMP/magiskboot" unpack "$IMG"
+        ls -lh kernel ramdisk.cpio
+
         "$TMP/magiskboot" cpio ramdisk.cpio extract prop.default prop.default
+        if [ ! -f prop.default ]; then
+          echo "::error::prop.default not found in recovery ramdisk - cannot fix device identity"
+          "$TMP/magiskboot" cpio ramdisk.cpio ls | head -40
+          exit 1
+        fi
 
         echo "--- before ---"
         grep -E '^ro\.(product\.device|build\.product|product\.vendor\.device|product\.system\.device)=' prop.default || true
@@ -229,8 +237,18 @@ jobs:
         "$TMP/magiskboot" repack "$IMG" new-boot.img
         mv -f new-boot.img "$IMG"
 
-        echo "--- repacked ---"
+        echo "--- verify repacked image ---"
+        rm -f ramdisk.cpio
         "$TMP/magiskboot" unpack "$IMG"
+        "$TMP/magiskboot" cpio ramdisk.cpio extract prop.default prop.verify
+        grep -E '^ro\.(product\.device|build\.product|product\.vendor\.device|product\.system\.device)=' prop.verify
+        for key in ro.product.device ro.build.product ro.product.vendor.device ro.product.system.device; do
+          grep -qx "${key}=${DEVID}" prop.verify || {
+            echo "::error::${key} is not ${DEVID} in the repacked image"
+            exit 1
+          }
+        done
+        echo "Device identity verified as ${DEVID}"
         ls -lh "$IMG"
 
     - name: Upload to Release
