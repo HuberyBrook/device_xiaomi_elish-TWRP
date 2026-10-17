@@ -183,19 +183,23 @@ jobs:
         IMG="$WORK/out/target/product/${{ env.BUILD_PRODUCT_DIR }}/${{ env.BUILD_TARGET_NAME }}.img"
         DEVID="${{ inputs.DEVICE_NAME }}"
 
-        # Prefer the tree's own magiskboot (ships in the device tree).
+        # magiskboot is vendored in the device tree (prebuilt/dagu/magiskboot)
+        # so the build does not depend on downloading from the Magisk release,
+        # whose CDN redirects break behind some proxies.
         MAGISKBOOT="$WORK/${{ inputs.DEVICE_PATH }}/prebuilt/${{ inputs.DEVICE_NAME }}/magiskboot"
         TMP=$(mktemp -d)
         if [ -x "$MAGISKBOOT" ]; then
+          echo "Using vendored magiskboot: $MAGISKBOOT"
           cp "$MAGISKBOOT" "$TMP/magiskboot"
         else
-          echo "magiskboot not found in device tree, downloading from Magisk release"
-          curl -fsSL -o "$TMP/magisk.zip" \
+          echo "::warning::magiskboot not found in device tree, falling back to Magisk release"
+          curl -fsSL --retry 3 -o "$TMP/magisk.apk" \
             https://github.com/topjohnwu/Magisk/releases/download/v27.0/Magisk-v27.0.apk
-          ( cd "$TMP" && unzip -o -q magisk.zip lib/arm64-v8a/libmagiskboot.so )
+          ( cd "$TMP" && unzip -o -q magisk.apk 'lib/arm64-v8a/*' )
           cp "$TMP/lib/arm64-v8a/libmagiskboot.so" "$TMP/magiskboot"
         fi
         chmod +x "$TMP/magiskboot"
+        "$TMP/magiskboot" --help > /dev/null 2>&1 || true
 
         cd "$TMP"
         "$TMP/magiskboot" unpack "$IMG"
