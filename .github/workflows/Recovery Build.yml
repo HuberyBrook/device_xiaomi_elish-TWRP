@@ -140,18 +140,20 @@ jobs:
     - name: Locate build output
       run: |
         cd ${GITHUB_WORKSPACE}/twrp/out/target/product
-        echo "=== output dirs ==="
-        ls -d */ 2>/dev/null
+        found=""
         for d in */; do
           if [ -f "${d}${{ env.BUILD_TARGET_NAME }}.img" ]; then
-            echo "BUILD_PRODUCT_DIR=${d%/}" >> $GITHUB_ENV
+            found="${d%/}"
             ls -lh "${d}${{ env.BUILD_TARGET_NAME }}.img"
           fi
         done
-        if [ -z "${BUILD_PRODUCT_DIR}" ]; then
+        if [ -z "$found" ]; then
           echo "::error::No ${{ env.BUILD_TARGET_NAME }}.img found under out/target/product/"
+          ls -laR . | head -50
           exit 1
         fi
+        echo "BUILD_PRODUCT_DIR=$found" >> $GITHUB_ENV
+        echo "Detected output dir: $found"
 
     - name: Upload to Release
       uses: softprops/action-gh-release@master
