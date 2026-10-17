@@ -137,12 +137,28 @@ jobs:
            echo "BUILD_TARGET_NAME=vendor_boot" >> $GITHUB_ENV
         fi
 
+    - name: Locate build output
+      run: |
+        cd ${GITHUB_WORKSPACE}/twrp/out/target/product
+        echo "=== output dirs ==="
+        ls -d */ 2>/dev/null
+        for d in */; do
+          if [ -f "${d}${{ env.BUILD_TARGET_NAME }}.img" ]; then
+            echo "BUILD_PRODUCT_DIR=${d%/}" >> $GITHUB_ENV
+            ls -lh "${d}${{ env.BUILD_TARGET_NAME }}.img"
+          fi
+        done
+        if [ -z "${BUILD_PRODUCT_DIR}" ]; then
+          echo "::error::No ${{ env.BUILD_TARGET_NAME }}.img found under out/target/product/"
+          exit 1
+        fi
+
     - name: Upload to Release
       uses: softprops/action-gh-release@master
       with:
         files: |
-          twrp/out/target/product/${{ inputs.DEVICE_NAME }}/${{ env.BUILD_TARGET_NAME }}.img
-          twrp/out/target/product/${{ inputs.DEVICE_NAME }}/*.zip
+          twrp/out/target/product/${{ env.BUILD_PRODUCT_DIR }}/${{ env.BUILD_TARGET_NAME }}.img
+          twrp/out/target/product/${{ env.BUILD_PRODUCT_DIR }}/*.zip
         name: Unofficial TWRP for ${{ inputs.MAKEFILE_NAME }} // ${{ env.BUILD_DATE }}
         tag_name: ${{ github.run_id }}
         body: |
