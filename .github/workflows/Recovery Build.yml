@@ -155,6 +155,80 @@ jobs:
         echo "BUILD_PRODUCT_DIR=$found" >> $GITHUB_ENV
         echo "Detected output dir: $found"
 
+    # ---------------------------------------------------------------------
+    # Fix device identity inside the recovery ramdisk.
+    #
+    # PRODUCT_DEVICE in twrp_dagu.mk has to stay "elish" (the whole device
+    # tree is keyed off it: inherit chain, libinit_elish,
+    # TARGET_INIT_VENDOR_LIB, prebuilt paths). buildinfo.sh therefore bakes
+    # ro.product.device=elish and ro.build.product=elish into the ramdisk's
+    # prop.default.
+    #
+    # AnyKernel3's update-binary cannot use getprop inside recovery (TWRP's
+    # /system is not mounted yet at that point), so it falls back to
+    # file_getprop on /default.prop and reads ro.build.product /
+    # ro.product.vendor.device. Seeing "elish" instead of "dagu" makes every
+    # AK3 kernel package abort with:
+    #     Checking device...
+    #     Unsupported device. Aborting...
+    #
+    # system.prop also overrides these, but this step is the hard guarantee:
+    # it rewrites prop.default in the finished image, so the artifact is
+    # always correct no matter how the build system orders properties.
+    # ---------------------------------------------------------------------
+    - name: Fix device identity in recovery ramdisk
+      run: |
+        set -euo pipefail
+        WORK=${GITHUB_WORKSPACE}/twrp
+        IMG="$WORK/out/target/product/${{ env.BUILD_PRODUCT_DIR }}/${{ env.BUILD_TARGET_NAME }}.img"
+        DEVID="${{ inputs.DEVICE_NAME }}"
+
+        # Prefer the tree's own magiskboot (ships in the device tree).
+        MAGISKBOOT="$WORK/${{ inputs.DEVICE_PATH }}/prebuilt/${{ inputs.DEVICE_NAME }}/magiskboot"
+        TMP=$(mktemp -d)
+        if [ -x "$MAGISKBOOT" ]; then
+          cp "$MAGISKBOOT" "$TMP/magiskboot"
+        else
+          echo "magiskboot not found in device tree, downloading from Magisk release"
+          curl -fsSL -o "$TMP/magisk.zip" \
+            https://github.com/topjohnwu/Magisk/releases/download/v27.0/Magisk-v27.0.apk
+          ( cd "$TMP" && unzip -o -q magisk.zip lib/arm64-v8a/libmagiskboot.so )
+          cp "$TMP/lib/arm64-v8a/libmagiskboot.so" "$TMP/magiskboot"
+        fi
+        chmod +x "$TMP/magiskboot"
+
+        cd "$TMP"
+        "$TMP/magiskboot" unpack "$IMG"
+        "$TMP/magiskboot" cpio ramdisk.cpio extract prop.default prop.default
+
+        echo "--- before ---"
+        grep -E '^ro\.(product\.device|build\.product|product\.vendor\.device|product\.system\.device)=' prop.default || true
+
+        sed -i -E \
+          -e "s/^ro\.build\.product=.*/ro.build.product=${DEVID}/" \
+          -e "s/^ro\.product\.vendor\.device=.*/ro.product.vendor.device=${DEVID}/" \
+          -e "s/^ro\.product\.system\.device=.*/ro.product.system.device=${DEVID}/" \
+          prop.default
+
+        for key in ro.product.device ro.build.product ro.product.vendor.device ro.product.system.device; do
+          if ! grep -q "^${key}=" prop.default; then
+            echo "${key}=${DEVID}" >> prop.default
+          else
+            sed -i -E "s|^${key}=.*|${key}=${DEVID}|" prop.default
+          fi
+        done
+
+        echo "--- after ---"
+        grep -E '^ro\.(product\.device|build\.product|product\.vendor\.device|product\.system\.device)=' prop.default
+
+        "$TMP/magiskboot" cpio ramdisk.cpio "add 644 prop.default prop.default"
+        "$TMP/magiskboot" repack "$IMG" new-boot.img
+        mv -f new-boot.img "$IMG"
+
+        echo "--- repacked ---"
+        "$TMP/magiskboot" unpack "$IMG"
+        ls -lh "$IMG"
+
     - name: Upload to Release
       uses: softprops/action-gh-release@master
       with:

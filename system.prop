@@ -10,3 +10,24 @@ ro.charger.enable_suspend=1
 
 # Reset allocatable space
 ro.dynamic.full_size=9126805504
+
+# ---------------------------------------------------------------------------
+# Device identity for third-party zips (AnyKernel3 do_devicecheck)
+#
+# PRODUCT_DEVICE must stay "elish" because the whole tree (inherit chain,
+# libinit_elish, TARGET_INIT_VENDOR_LIB, prebuilt path) is keyed off it.
+# buildinfo.sh therefore emits ro.build.product=elish and
+# ro.product.device=elish into the recovery ramdisk's prop.default.
+#
+# AnyKernel3's update-binary cannot call getprop inside recovery (TWRP's
+# /system is not mounted at that point), so it falls back to file_getprop on
+# /default.prop -> /prop.default and reads exactly those two keys. It then
+# compares them against `device.name1=dagu` in anykernel.sh and aborts with
+# "Unsupported device. Aborting..." for every AK3 kernel package.
+#
+# system.prop is appended to build.prop AFTER buildinfo.sh output, and later
+# definitions win inside one property file, so these override the elish values.
+# ---------------------------------------------------------------------------
+ro.product.device=dagu
+ro.build.product=dagu
+ro.product.vendor.device=dagu

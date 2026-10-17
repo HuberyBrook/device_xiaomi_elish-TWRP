@@ -31,6 +31,17 @@ PRODUCT_BRAND := Xiaomi
 PRODUCT_MODEL := Xiaomi Pad 5 Pro 12.4
 PRODUCT_MANUFACTURER := Xiaomi
 
+# Device name for AK3 / third-party zip devicecheck.
+# PRODUCT_DEVICE must stay "elish" (build output dir + inherit chain depend on it),
+# so force the props that AnyKernel3's do_devicecheck() reads to "dagu".
+# Without this, update-binary falls back to reading prop.default, finds elish,
+# and aborts with "Unsupported device."
+PRODUCT_PROPERTY_OVERRIDES += \
+    ro.product.device=dagu \
+    ro.build.product=dagu \
+    ro.product.vendor.device=dagu \
+    ro.product.system.device=dagu
+
 # Display (dagu: 1600x2560 @320dpi, 120Hz LCD)
 TARGET_SCREEN_DENSITY := 320
 TARGET_SCREEN_HEIGHT := 2560
