@@ -49,17 +49,10 @@ on boot
     setprop sys.usb.config adb
 
 on property:vendor.sys.listeners.registered=true
-    start keymaster-4-1
     start keymaster-4-0
     start gatekeeper-1-0
 
 service vendor.qseecomd /vendor/bin/qseecomd
-    user root
-    group root
-    disabled
-    seclabel u:r:recovery:s0
-
-service keymaster-4-1 /vendor/bin/hw/android.hardware.keymaster@4.1-service-qti
     user root
     group root
     disabled
